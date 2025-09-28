@@ -23,7 +23,7 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Mckay's App Template",
+  title: "Question Smith",
   description: "A full-stack web app template."
 }
 

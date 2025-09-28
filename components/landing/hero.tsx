@@ -28,7 +28,7 @@ export const HeroSection = () => {
         transition={{ duration: 0.6, ease: "easeOut" }}
         className="flex items-center justify-center"
       >
-        <Link href="https://github.com/mckaywrigley/mckays-app-template">
+        <Link href="https://github.com/mckaywrigley/question-smith">
           <AnimatedGradientText>
             🚀 <hr className="mx-2 h-4 w-px shrink-0 bg-gray-300" />
             <span
@@ -64,7 +64,7 @@ export const HeroSection = () => {
           transition={{ duration: 0.6, delay: 0.6, ease: "easeOut" }}
           className="max-w-xl text-balance text-xl"
         >
-          Use Mckay's app template to save time and get started with your next
+          Use Question Smith to save time and get started with your next
           project.
         </motion.div>
 
@@ -74,7 +74,7 @@ export const HeroSection = () => {
           transition={{ duration: 0.6, delay: 0.8, ease: "easeOut" }}
         >
           <Link
-            href="https://github.com/mckaywrigley/mckays-app-template"
+            href="https://github.com/mckaywrigley/question-smith"
             onClick={handleGetStartedClick}
           >
             <Button className="bg-blue-500 text-lg hover:bg-blue-600">
