@@ -80,3 +80,20 @@ export async function deleteTodoAction(id: string): Promise<ActionState<void>> {
     return { isSuccess: false, message: "Failed to delete todo" }
   }
 }
+
+export async function deleteTodosByUserIdAction(
+  userId: string
+): Promise<ActionState<void>> {
+  try {
+    await db.delete(todosTable).where(eq(todosTable.userId, userId))
+
+    return {
+      isSuccess: true,
+      message: "Todos deleted for user",
+      data: undefined
+    }
+  } catch (error) {
+    console.error("Error deleting todos by user id:", error)
+    return { isSuccess: false, message: "Failed to delete todos by user" }
+  }
+}

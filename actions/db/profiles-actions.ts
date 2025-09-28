@@ -19,11 +19,32 @@ export async function createProfileAction(
   data: InsertProfile
 ): Promise<ActionState<SelectProfile>> {
   try {
-    const [newProfile] = await db.insert(profilesTable).values(data).returning()
+    const [newProfile] = await db
+      .insert(profilesTable)
+      .values(data)
+      .onConflictDoNothing({ target: profilesTable.userId })
+      .returning()
+
+    if (newProfile) {
+      return {
+        isSuccess: true,
+        message: "Profile created successfully",
+        data: newProfile
+      }
+    }
+
+    const existingProfile = await db.query.profiles.findFirst({
+      where: eq(profilesTable.userId, data.userId)
+    })
+
+    if (!existingProfile) {
+      throw new Error("Failed to create or retrieve profile")
+    }
+
     return {
       isSuccess: true,
-      message: "Profile created successfully",
-      data: newProfile
+      message: "Profile already exists",
+      data: existingProfile
     }
   } catch (error) {
     console.error("Error creating profile:", error)

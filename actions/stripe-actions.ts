@@ -84,7 +84,30 @@ export const manageSubscriptionStatusChange = async (
 
     const subscription = await getSubscription(subscriptionId)
     const product = await stripe.products.retrieve(productId)
-    const membership = product.metadata.membership as MembershipStatus
+    const metadataMembership = product.metadata.membership as
+      | MembershipStatus
+      | undefined
+
+    let fallbackMembership: MembershipStatus | undefined
+    const defaultPrice = product.default_price
+
+    if (defaultPrice && typeof defaultPrice !== "string") {
+      fallbackMembership = defaultPrice.metadata?.membership as
+        | MembershipStatus
+        | undefined
+
+      if (!fallbackMembership && defaultPrice.nickname) {
+        const nickname = defaultPrice.nickname.toLowerCase()
+        if (nickname.includes("pro")) {
+          fallbackMembership = "pro"
+        } else if (nickname.includes("free")) {
+          fallbackMembership = "free"
+        }
+      }
+    }
+
+    const membership: MembershipStatus =
+      metadataMembership || fallbackMembership || "pro"
 
     if (!["free", "pro"].includes(membership)) {
       throw new Error(

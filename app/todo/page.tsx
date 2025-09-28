@@ -25,10 +25,6 @@ export default async function TodoPage() {
     return redirect("/signup")
   }
 
-  if (profile.membership === "free") {
-    return redirect("/pricing")
-  }
-
   const todos = await getTodosAction(userId)
 
   return (
