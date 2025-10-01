@@ -55,8 +55,8 @@ const data = {
       isActive: true,
       items: [
         { title: "Overview", url: "/dashboard" },
-        { title: "Recent Activity", url: "/dashboard/activity" },
-        { title: "Statistics", url: "/dashboard/stats" }
+        { title: "Recent Quizzes", url: "/dashboard/recent" },
+        { title: "Statistics", url: "/dashboard/statistics" }
       ]
     },
     {
@@ -77,8 +77,16 @@ const data = {
       items: [
         { title: "All Quizzes", url: "/quizzes" },
         { title: "Drafts", url: "/quizzes/drafts" },
-        { title: "Published", url: "/quizzes/published" },
-        { title: "Archived", url: "/quizzes/archived" }
+        { title: "Published", url: "/quizzes/published" }
+      ]
+    },
+    {
+      title: "Quiz History",
+      url: "/history",
+      icon: History,
+      items: [
+        { title: "Past Attempts", url: "/history/attempts" },
+        { title: "Results", url: "/history/results" }
       ]
     },
     {
@@ -87,26 +95,19 @@ const data = {
       icon: Library,
       items: [
         { title: "All Questions", url: "/questions" },
-        { title: "Favorites", url: "/questions/favorites" },
-        { title: "By Subject", url: "/questions/subjects" }
+        { title: "Saved Questions", url: "/questions/saved" },
+        { title: "Favorites", url: "/questions/favorites" }
       ]
     },
     {
-      title: "Quiz History",
-      url: "/history",
-      icon: History,
+      title: "Templates",
+      url: "/templates",
+      icon: BookOpen,
       items: [
-        { title: "Attempts", url: "/history/attempts" },
-        { title: "Results", url: "/history/results" }
-      ]
-    },
-    {
-      title: "Analytics",
-      url: "/analytics",
-      icon: BarChart3,
-      items: [
-        { title: "Performance", url: "/analytics/performance" },
-        { title: "Insights", url: "/analytics/insights" }
+        { title: "Multiple Choice", url: "/templates/multiple-choice" },
+        { title: "True/False", url: "/templates/true-false" },
+        { title: "Short Answer", url: "/templates/short-answer" },
+        { title: "Fill in the Blank", url: "/templates/fill-blank" }
       ]
     },
     {
@@ -114,17 +115,27 @@ const data = {
       url: "/settings",
       icon: Settings2,
       items: [
-        { title: "General", url: "/settings" },
-        { title: "AI Models", url: "/settings/models" },
-        { title: "Preferences", url: "/settings/preferences" },
-        { title: "Billing", url: "/settings/billing" }
+        { title: "Quiz Preferences", url: "/settings/preferences" },
+        { title: "AI Model Settings", url: "/settings/ai-models" },
+        { title: "API Keys", url: "/settings/api-keys" }
+      ]
+    },
+    {
+      title: "Analytics",
+      url: "/analytics",
+      icon: BarChart3,
+      items: [
+        { title: "Performance Metrics", url: "/analytics/performance" },
+        { title: "Insights", url: "/analytics/insights" }
       ]
     }
   ],
   projects: [
-    { name: "Mathematics", url: "/subjects/math", icon: Brain },
+    { name: "Mathematics", url: "/subjects/mathematics", icon: Brain },
     { name: "Science", url: "/subjects/science", icon: BookOpen },
-    { name: "History", url: "/subjects/history", icon: FolderOpen }
+    { name: "History", url: "/subjects/history", icon: FolderOpen },
+    { name: "Share Quizzes", url: "/share", icon: FileText },
+    { name: "Import/Export", url: "/import-export", icon: FolderOpen }
   ]
 }
 
