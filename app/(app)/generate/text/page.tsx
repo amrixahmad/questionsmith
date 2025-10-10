@@ -7,12 +7,13 @@ Server page for generating a quiz from raw text using OpenAI.
 "use server"
 
 import { generateQuizFromTextAction } from "@/actions/ai/generate-actions"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
+import PendingFieldset from "../_components/pending-fieldset"
+import SubmitButton from "../_components/submit-button"
 
 export default async function GenerateFromTextPage() {
   async function generate(formData: FormData) {
@@ -48,28 +49,34 @@ export default async function GenerateFromTextPage() {
         </CardHeader>
         <CardContent>
           <form action={generate} className="space-y-4">
-            <div>
-              <Label htmlFor="text">Paste text</Label>
-              <Textarea
-                id="text"
-                name="text"
-                rows={10}
-                placeholder="Paste content here..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="questionCount">Question count</Label>
-              <input
-                id="questionCount"
-                name="questionCount"
-                type="number"
-                min={1}
-                max={50}
-                defaultValue={10}
-                className="border-input bg-background text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-24 rounded-md border px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-            </div>
-            <Button type="submit">Generate</Button>
+            <PendingFieldset>
+              <div>
+                <Label htmlFor="text">Paste text</Label>
+                <Textarea
+                  id="text"
+                  name="text"
+                  rows={10}
+                  placeholder="Paste content here..."
+                />
+              </div>
+              <div>
+                <Label htmlFor="questionCount">Question count</Label>
+                <input
+                  id="questionCount"
+                  name="questionCount"
+                  type="number"
+                  min={1}
+                  max={50}
+                  defaultValue={10}
+                  className="border-input bg-background text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-24 rounded-md border px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <div className="text-muted-foreground mt-1 text-xs">
+                  Generating can take 20–40 seconds depending on input size.
+                </div>
+              </div>
+
+              <SubmitButton label="Generate" />
+            </PendingFieldset>
           </form>
         </CardContent>
       </Card>
