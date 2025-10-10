@@ -9,7 +9,8 @@ import {
   contentSourcesTable,
   quizzesTable,
   questionsTable,
-  attemptsTable
+  attemptsTable,
+  answersTable
 } from "@/db/schema"
 import { config } from "dotenv"
 import { drizzle } from "drizzle-orm/postgres-js"
@@ -22,7 +23,8 @@ const schema = {
   contentSources: contentSourcesTable,
   quizzes: quizzesTable,
   questions: questionsTable,
-  attempts: attemptsTable
+  attempts: attemptsTable,
+  answers: answersTable
 }
 
 const client = postgres(process.env.DATABASE_URL!)

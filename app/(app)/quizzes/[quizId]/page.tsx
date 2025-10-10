@@ -15,6 +15,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { QuestionList } from "./_components/quiz-question-list"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
 
 export default async function QuizDetailPage({
   params
@@ -58,6 +60,12 @@ export default async function QuizDetailPage({
           </div>
 
           <Separator className="my-4" />
+
+          <div className="mb-4">
+            <Button asChild>
+              <Link href={`/quizzes/${quiz.id}/take`}>Take Quiz</Link>
+            </Button>
+          </div>
 
           <QuestionList questions={questions} />
         </CardContent>
