@@ -87,7 +87,12 @@ export async function submitAttemptAction(input: {
     for (const ans of input.answers) {
       const q = qs.find(x => x.id === ans.questionId)
       if (!q) continue
-      const correct = compareAnswer(q.type, q.answer as unknown, ans.response)
+      const correct = compareAnswer(
+        q.type,
+        q.answer as unknown,
+        ans.response,
+        q.options
+      )
       if (correct) score += pointsPer
       rowsToInsert.push({
         attemptId: attempt.id,
@@ -134,17 +139,10 @@ export async function submitAttemptAction(input: {
 function compareAnswer(
   type: string,
   expected: unknown,
-  received: unknown
+  received: unknown,
+  options: unknown
 ) {
-  // Normalize values
-  const norm = (v: unknown) => {
-    if (v == null) return ""
-    if (typeof v === "boolean") return v ? "true" : "false"
-    if (Array.isArray(v)) return v.map(x => String(x).trim().toLowerCase()).sort().join("|")
-    if (typeof v === "object") return JSON.stringify(v)
-    return String(v).trim().toLowerCase()
-  }
-
+  // true/false: boolean equivalence
   if (type === "true_false") {
     const toBool = (v: unknown) => {
       if (typeof v === "boolean") return v
@@ -154,6 +152,94 @@ function compareAnswer(
     return toBool(expected) === toBool(received)
   }
 
-  // For multiple_choice and short/free text, do case-insensitive string compare
+  // multiple_choice: compare by option index, handling letters/index/text
+  if (type === "multiple_choice") {
+    const opts = normalizeOptionsServer(options)
+    const idxFromExpected = optionIndex(expected, opts)
+    const idxFromReceived = optionIndex(received, opts)
+    if (idxFromExpected == null || idxFromReceived == null) return false
+    return idxFromExpected === idxFromReceived
+  }
+
+  // short_answer / fill_blank: normalized string compare
+  const norm = (v: unknown) => {
+    if (v == null) return ""
+    if (typeof v === "boolean") return v ? "true" : "false"
+    if (Array.isArray(v)) return v.map(x => String(x).trim().toLowerCase()).sort().join("|")
+    if (typeof v === "object") return JSON.stringify(v)
+    return String(v).trim().toLowerCase()
+  }
   return norm(expected) === norm(received)
+}
+
+function normalizeOptionsServer(options: unknown): string[] {
+  if (!options) return []
+  if (Array.isArray(options)) {
+    const texts: string[] = []
+    for (const item of options as any[]) {
+      if (typeof item === "string") texts.push(item)
+      else if (item && typeof item === "object") {
+        const maybe = (item as any).text ?? (item as any).label ?? ""
+        if (maybe) texts.push(String(maybe))
+      }
+    }
+    return texts
+  }
+  return []
+}
+
+function optionIndex(value: unknown, options: string[]): number | null {
+  if (!options || options.length === 0) return null
+  if (typeof value === "number") {
+    const i = Math.floor(value)
+    return i >= 0 && i < options.length ? i : null
+  }
+  const s = String(value ?? "").trim()
+  if (!s) return null
+
+  // letter like a/A/b/B -> index 0/1/etc
+  const lower = s.toLowerCase()
+  // accept letter optionally followed by ')' or '.'
+  if (/^[a-z][)\.]?$/.test(lower)) {
+    const ch = lower[0]
+    const i = ch.charCodeAt(0) - "a".charCodeAt(0)
+    return i >= 0 && i < options.length ? i : null
+  }
+
+  // patterns like 'a3' or 'A 3' => interpret as 1-based index 3
+  const letterNum = lower.match(/^([a-z])\s*(\d+)$/)
+  if (letterNum) {
+    const n = parseInt(letterNum[2], 10)
+    const idx = n - 1
+    return idx >= 0 && idx < options.length ? idx : null
+  }
+
+  // patterns like 'option c', 'choice d', 'answer b'
+  const wordLetter = lower.match(/^(option|choice|answer)\s+([a-z])$/)
+  if (wordLetter) {
+    const ch = wordLetter[2]
+    const i = ch.charCodeAt(0) - "a".charCodeAt(0)
+    return i >= 0 && i < options.length ? i : null
+  }
+
+  // numeric string -> index
+  if (/^\d+$/.test(s)) {
+    const i = parseInt(s, 10)
+    // accept both 0-based and 1-based; if in bounds as-is use it; else try i-1
+    if (i >= 0 && i < options.length) return i
+    if (i - 1 >= 0 && i - 1 < options.length) return i - 1
+  }
+
+  // patterns like 'option 3', 'choice 2', 'answer 4'
+  const wordNum = lower.match(/^(option|choice|answer)\s+(\d+)$/)
+  if (wordNum) {
+    const i = parseInt(wordNum[2], 10)
+    const idx = i - 1
+    return idx >= 0 && idx < options.length ? idx : null
+  }
+
+  // otherwise, treat as option text
+  const target = s.toLowerCase()
+  const idx = options.findIndex(o => String(o).trim().toLowerCase() === target)
+  return idx >= 0 ? idx : null
 }

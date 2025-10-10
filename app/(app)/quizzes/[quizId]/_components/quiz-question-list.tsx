@@ -86,7 +86,9 @@ export function QuestionList({ questions }: QuestionListProps) {
           {showAnswer[q.id] && (
             <div className="bg-muted mt-2 rounded p-2 text-sm">
               <div className="font-medium">Answer</div>
-              <div className="mt-1">{formatAnswer(q.answer)}</div>
+              <div className="mt-1">
+                {formatAnswer(q.answer, q.options, q.type)}
+              </div>
             </div>
           )}
 
@@ -158,13 +160,120 @@ function renderOptions(
   return null
 }
 
+function toAnswerIndex(value: unknown, options?: string[]): number | null {
+  const s = String(value ?? "").trim()
+  if (!s) return null
+  const lower = s.toLowerCase()
+
+  // single letter (optionally with ')' or '.')
+  if (/^[a-z][)\.]?$/i.test(s)) {
+    const ch = lower[0]
+    return ch.charCodeAt(0) - "a".charCodeAt(0)
+  }
+
+  // 'a3' or 'A 3' => 1-based index 3
+  const letterNum = lower.match(/^([a-z])\s*(\d+)$/)
+  if (letterNum) {
+    const idx = parseInt(letterNum[2], 10) - 1
+    return idx >= 0 ? idx : null
+  }
+
+  // 'option c', 'choice d', 'answer b'
+  const wordLetter = lower.match(/^(option|choice|answer)\s+([a-z])$/)
+  if (wordLetter) {
+    const ch = wordLetter[2]
+    return ch.charCodeAt(0) - "a".charCodeAt(0)
+  }
+
+  // numeric -> index; accept 0-based or 1-based
+  if (/^\d+$/.test(s)) {
+    const i = parseInt(s, 10)
+    if (options && i >= 1 && i <= options.length) return i - 1
+    return i
+  }
+
+  // 'option 3', 'choice 2', 'answer 4'
+  const wordNum = lower.match(/^(option|choice|answer)\s+(\d+)$/)
+  if (wordNum) {
+    const idx = parseInt(wordNum[2], 10) - 1
+    return idx >= 0 ? idx : null
+  }
+
+  // option text -> index
+  if (options && options.length) {
+    const idx = options.findIndex(o => String(o).trim().toLowerCase() === lower)
+    return idx >= 0 ? idx : null
+  }
+  return null
+}
+
 function indexToLetter(i: number) {
   return String.fromCharCode("A".charCodeAt(0) + i)
 }
 
-function formatAnswer(ans: unknown): string {
+function formatAnswer(
+  ans: unknown,
+  options: string[] | undefined,
+  type: SelectQuestion["type"]
+): string {
+  if (type === "multiple_choice") {
+    const idx = toAnswerIndex(ans, options)
+    if (idx != null) {
+      const letter = indexToLetter(idx)
+      if (options && idx >= 0 && idx < options.length)
+        return `${letter} — ${options[idx]}`
+      return letter
+    }
+  }
   if (Array.isArray(ans)) return ans.map(a => String(a)).join(", ")
   if (typeof ans === "boolean") return ans ? "True" : "False"
   if (ans == null) return ""
   return String(ans)
+}
+
+function toAnswerLetter(value: unknown, options?: string[]): string | null {
+  const s = String(value ?? "").trim()
+  if (!s) return null
+  const lower = s.toLowerCase()
+
+  // single letter (optionally with ')' or '.') -> uppercase
+  if (/^[a-z][)\.]?$/i.test(s)) return s[0].toUpperCase()
+
+  // patterns like 'a3' or 'A 3' => 1-based index 3 -> 'C'
+  const letterNum = lower.match(/^([a-z])\s*(\d+)$/)
+  if (letterNum) {
+    const idx = parseInt(letterNum[2], 10) - 1
+    if (idx >= 0 && (!options || (options && idx < options.length))) {
+      return indexToLetter(idx)
+    }
+  }
+
+  // patterns like 'option c', 'choice d', 'answer b'
+  const wordLetter = lower.match(/^(option|choice|answer)\s+([a-z])$/)
+  if (wordLetter) return wordLetter[2].toUpperCase()
+
+  // numeric -> index; accept 0-based or 1-based
+  if (/^\d+$/.test(s)) {
+    const i = parseInt(s, 10)
+    const idx = options ? (i >= 1 && i <= options.length ? i - 1 : i) : i - 1
+    if (idx >= 0 && (!options || (options && idx < options.length))) {
+      return indexToLetter(idx)
+    }
+  }
+
+  // patterns like 'option 3', 'choice 2', 'answer 4'
+  const wordNum = lower.match(/^(option|choice|answer)\s+(\d+)$/)
+  if (wordNum) {
+    const idx = parseInt(wordNum[2], 10) - 1
+    if (idx >= 0 && (!options || (options && idx < options.length))) {
+      return indexToLetter(idx)
+    }
+  }
+
+  // option text -> find index and map to letter
+  if (options && options.length) {
+    const idx = options.findIndex(o => String(o).trim().toLowerCase() === lower)
+    if (idx >= 0) return indexToLetter(idx)
+  }
+  return null
 }

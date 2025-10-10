@@ -32,6 +32,69 @@ export async function generateQuizFromTextAction(input: {
       language: input.params?.language
     }
 
+function normalizeOptionsServer(options: unknown): string[] {
+  if (!options) return []
+  if (Array.isArray(options)) {
+    const texts: string[] = []
+    for (const item of options as any[]) {
+      if (typeof item === "string") texts.push(item)
+      else if (item && typeof item === "object") {
+        const maybe = (item as any).text ?? (item as any).label ?? ""
+        if (maybe) texts.push(String(maybe))
+      }
+    }
+    return texts
+  }
+  return []
+}
+
+function optionIndex(value: unknown, options: string[]): number | null {
+  if (!options || options.length === 0) return null
+  if (typeof value === "number") {
+    const i = Math.floor(value)
+    return i >= 0 && i < options.length ? i : null
+  }
+  const s = String(value ?? "").trim()
+  if (!s) return null
+
+  const lower = s.toLowerCase()
+  // single letter (optionally with ')' or '.') -> index
+  if (/^[a-z][)\.]?$/.test(lower)) {
+    const ch = lower[0]
+    const i = ch.charCodeAt(0) - "a".charCodeAt(0)
+    return i >= 0 && i < options.length ? i : null
+  }
+  // patterns like 'a3' or 'A 3' -> 1-based index
+  const letterNum = lower.match(/^([a-z])\s*(\d+)$/)
+  if (letterNum) {
+    const idx = parseInt(letterNum[2], 10) - 1
+    return idx >= 0 && idx < options.length ? idx : null
+  }
+  // patterns like 'option c', 'choice d', 'answer b'
+  const wordLetter = lower.match(/^(option|choice|answer)\s+([a-z])$/)
+  if (wordLetter) {
+    const ch = wordLetter[2]
+    const i = ch.charCodeAt(0) - "a".charCodeAt(0)
+    return i >= 0 && i < options.length ? i : null
+  }
+  // numeric string -> index (accept 0-based or 1-based)
+  if (/^\d+$/.test(s)) {
+    const i = parseInt(s, 10)
+    if (i >= 0 && i < options.length) return i
+    if (i - 1 >= 0 && i - 1 < options.length) return i - 1
+  }
+  // patterns like 'option 3', 'choice 2', 'answer 4'
+  const wordNum = lower.match(/^(option|choice|answer)\s+(\d+)$/)
+  if (wordNum) {
+    const i = parseInt(wordNum[2], 10) - 1
+    return i >= 0 && i < options.length ? i : null
+  }
+  // fall back to matching option text
+  const target = s.toLowerCase()
+  const idx = options.findIndex(o => String(o).trim().toLowerCase() === target)
+  return idx >= 0 ? idx : null
+}
+
     // 1) Persist content source
     const [source] = await db
       .insert(contentSourcesTable)
@@ -59,17 +122,26 @@ export async function generateQuizFromTextAction(input: {
       } satisfies InsertQuiz)
       .returning()
 
-    // 4) Persist questions
-    const questionRows: InsertQuestion[] = generated.questions.map((q, idx) => ({
-      quizId: quiz.id,
-      type: q.type,
-      stem: q.stem,
-      options: q.options ? q.options : null,
-      answer: q.answer,
-      explanation: q.explanation ?? null,
-      tags: q.tags ?? null,
-      order: q.order ?? idx + 1
-    }))
+    // 4) Persist questions (canonicalize MCQ answers to index where possible)
+    const questionRows: InsertQuestion[] = generated.questions.map((q, idx) => {
+      let answer: unknown = q.answer
+      if (q.type === "multiple_choice" && q.options && q.options.length) {
+        const opts = normalizeOptionsServer(q.options)
+        const i = optionIndex(q.answer, opts)
+        if (i != null) answer = i // store canonical 0-based index
+      }
+
+      return {
+        quizId: quiz.id,
+        type: q.type,
+        stem: q.stem,
+        options: q.options ? q.options : null,
+        answer,
+        explanation: q.explanation ?? null,
+        tags: q.tags ?? null,
+        order: q.order ?? idx + 1
+      }
+    })
 
     if (questionRows.length) {
       await db.insert(questionsTable).values(questionRows)
