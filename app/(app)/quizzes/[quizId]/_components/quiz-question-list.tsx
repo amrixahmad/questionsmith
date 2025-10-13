@@ -13,9 +13,13 @@ import { useMemo, useState } from "react"
 
 interface QuestionListProps {
   questions: SelectQuestion[]
+  hideAnswerControls?: boolean
 }
 
-export function QuestionList({ questions }: QuestionListProps) {
+export function QuestionList({
+  questions,
+  hideAnswerControls
+}: QuestionListProps) {
   const [showAnswer, setShowAnswer] = useState<Record<string, boolean>>({})
   const [showExplanation, setShowExplanation] = useState<
     Record<string, boolean>
@@ -55,35 +59,40 @@ export function QuestionList({ questions }: QuestionListProps) {
             {renderOptions(q.type, q.options)}
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() =>
-                setShowAnswer(prev => ({ ...prev, [q.id]: !prev[q.id] }))
-              }
-            >
-              {showAnswer[q.id] ? "Hide answer" : "Show answer"}
-            </Button>
-
-            {q.explanation && (
+          {!hideAnswerControls && (
+            <div className="mt-3 flex items-center gap-2">
               <Button
                 type="button"
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 onClick={() =>
-                  setShowExplanation(prev => ({ ...prev, [q.id]: !prev[q.id] }))
+                  setShowAnswer(prev => ({ ...prev, [q.id]: !prev[q.id] }))
                 }
               >
-                {showExplanation[q.id]
-                  ? "Hide explanation"
-                  : "Show explanation"}
+                {showAnswer[q.id] ? "Hide answer" : "Show answer"}
               </Button>
-            )}
-          </div>
 
-          {showAnswer[q.id] && (
+              {q.explanation && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setShowExplanation(prev => ({
+                      ...prev,
+                      [q.id]: !prev[q.id]
+                    }))
+                  }
+                >
+                  {showExplanation[q.id]
+                    ? "Hide explanation"
+                    : "Show explanation"}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {!hideAnswerControls && showAnswer[q.id] && (
             <div className="bg-muted mt-2 rounded p-2 text-sm">
               <div className="font-medium">Answer</div>
               <div className="mt-1">
@@ -92,7 +101,7 @@ export function QuestionList({ questions }: QuestionListProps) {
             </div>
           )}
 
-          {showExplanation[q.id] && q.explanation && (
+          {!hideAnswerControls && showExplanation[q.id] && q.explanation && (
             <div className="bg-muted/60 mt-2 rounded p-2 text-sm">
               <div className="font-medium">Explanation</div>
               <div className="text-muted-foreground mt-1">{q.explanation}</div>
