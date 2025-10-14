@@ -7,8 +7,13 @@ Server page to view a quiz details and its questions.
 "use server"
 
 import { db } from "@/db/db"
-import { questionsTable, quizzesTable, shareLinksTable } from "@/db/schema"
-import { and, eq } from "drizzle-orm"
+import {
+  questionsTable,
+  quizzesTable,
+  shareLinksTable,
+  attemptsTable
+} from "@/db/schema"
+import { and, eq, isNotNull } from "drizzle-orm"
 import { notFound, redirect } from "next/navigation"
 import { auth } from "@clerk/nextjs/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -55,6 +60,25 @@ export default async function QuizDetailPage({
       eq(shareLinksTable.isPublic, true)
     )
   })
+
+  // Analytics
+  const attemptRows = await db.query.attempts.findMany({
+    where: and(
+      eq(attemptsTable.quizId, quizId),
+      isNotNull(attemptsTable.submittedAt)
+    )
+  })
+  const attemptCount = attemptRows.length
+  let totalRatio = 0
+  for (const a of attemptRows) {
+    const s = a.score ? Number(a.score) : 0
+    const m = a.maxScore ? Number(a.maxScore) : 0
+    if (m > 0) totalRatio += s / m
+  }
+  const avgPct = attemptCount
+    ? Math.round((totalRatio / attemptCount) * 100 * 10) / 10
+    : 0
+  const viewCount = existingShare?.views ?? 0
 
   async function doPublish() {
     "use server"
@@ -145,6 +169,15 @@ export default async function QuizDetailPage({
               )}
             </div>
           )}
+
+          <div className="mb-6 space-y-1">
+            <div className="text-sm font-medium">Analytics</div>
+            <div className="text-muted-foreground flex flex-wrap gap-4 text-sm">
+              <div>Views: {viewCount}</div>
+              <div>Attempts: {attemptCount}</div>
+              <div>Avg score: {avgPct}%</div>
+            </div>
+          </div>
 
           <div className="mb-6">
             <form action={setMaxAttempts} className="flex items-end gap-2">

@@ -4,7 +4,14 @@ Defines the database schema for tokenized share links for quizzes.
 </ai_context>
 */
 
-import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import {
+  boolean,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uuid
+} from "drizzle-orm/pg-core"
 import { quizzesTable } from "./quizzes-schema"
 
 export const shareLinksTable = pgTable("share_links", {
@@ -14,6 +21,7 @@ export const shareLinksTable = pgTable("share_links", {
     .references(() => quizzesTable.id, { onDelete: "cascade" }),
   token: text("token").notNull().unique(),
   isPublic: boolean("is_public").default(true).notNull(),
+  views: integer("views").notNull().default(0),
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow().notNull()
 })

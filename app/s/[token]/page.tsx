@@ -18,6 +18,7 @@ import { QuestionList } from "@/app/(app)/quizzes/[quizId]/_components/quiz-ques
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import RouteToast from "@/components/utilities/route-toast"
+import ShareViewBeacon from "@/components/utilities/share-view-beacon"
 
 export default async function SharedQuizPage({
   params
@@ -48,6 +49,7 @@ export default async function SharedQuizPage({
   return (
     <div className="mx-auto w-full max-w-4xl p-6">
       <RouteToast />
+      <ShareViewBeacon token={token} />
       <Card>
         <CardHeader>
           <CardTitle>{quiz.title}</CardTitle>
