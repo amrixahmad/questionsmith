@@ -28,6 +28,7 @@ export const quizzesTable = pgTable("quizzes", {
   difficulty: difficultyEnum("difficulty"),
   questionCount: integer("question_count").notNull().default(0),
   templateId: uuid("template_id"),
+  maxAttempts: integer("max_attempts").notNull().default(1),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

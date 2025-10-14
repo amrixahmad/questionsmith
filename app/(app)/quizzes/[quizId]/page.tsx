@@ -19,13 +19,15 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import {
   publishQuizAction,
-  unpublishQuizAction
+  unpublishQuizAction,
+  updateMaxAttemptsAction
 } from "@/actions/db/quizzes-actions"
 import {
   createShareLinkAction,
   revokeShareLinkAction
 } from "@/actions/db/share-links-actions"
 import CopyShareLink from "./_components/copy-share-link"
+import RouteToast from "@/components/utilities/route-toast"
 
 export default async function QuizDetailPage({
   params
@@ -78,8 +80,16 @@ export default async function QuizDetailPage({
     redirect(`/quizzes/${quizId}`)
   }
 
+  async function setMaxAttempts(formData: FormData) {
+    "use server"
+    const raw = Number(formData.get("maxAttempts") || 1)
+    await updateMaxAttemptsAction(quizId, isNaN(raw) ? 1 : raw)
+    redirect(`/quizzes/${quizId}`)
+  }
+
   return (
     <div className="mx-auto w-full max-w-4xl p-6">
+      <RouteToast />
       <Card>
         <CardHeader>
           <CardTitle>{quiz.title}</CardTitle>
@@ -135,6 +145,24 @@ export default async function QuizDetailPage({
               )}
             </div>
           )}
+
+          <div className="mb-6">
+            <form action={setMaxAttempts} className="flex items-end gap-2">
+              <div>
+                <div className="text-sm font-medium">Attempts per user</div>
+                <input
+                  type="number"
+                  name="maxAttempts"
+                  min={1}
+                  defaultValue={quiz.maxAttempts ?? 1}
+                  className="border-input bg-background text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-24 rounded-md border px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1"
+                />
+              </div>
+              <Button type="submit" variant="outline">
+                Update
+              </Button>
+            </form>
+          </div>
 
           <div className="mb-4">
             <Button asChild>

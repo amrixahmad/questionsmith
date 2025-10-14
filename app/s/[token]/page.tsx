@@ -17,6 +17,7 @@ import { notFound, redirect } from "next/navigation"
 import { QuestionList } from "@/app/(app)/quizzes/[quizId]/_components/quiz-question-list"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import RouteToast from "@/components/utilities/route-toast"
 
 export default async function SharedQuizPage({
   params
@@ -46,6 +47,7 @@ export default async function SharedQuizPage({
 
   return (
     <div className="mx-auto w-full max-w-4xl p-6">
+      <RouteToast />
       <Card>
         <CardHeader>
           <CardTitle>{quiz.title}</CardTitle>

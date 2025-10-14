@@ -16,7 +16,7 @@ import {
 } from "@/db/schema"
 import { ActionState } from "@/types"
 import { auth } from "@clerk/nextjs/server"
-import { and, eq, inArray } from "drizzle-orm"
+import { and, eq, inArray, isNotNull } from "drizzle-orm"
 
 export async function startAttemptAction(
   quizId: string
@@ -30,6 +30,19 @@ export async function startAttemptAction(
       where: eq(quizzesTable.id, quizId)
     })
     if (!quiz) return { isSuccess: false, message: "Quiz not found" }
+
+    // Enforce retake policy: default 1, owner can increase via maxAttempts
+    const allowed = typeof (quiz as any).maxAttempts === "number" && (quiz as any).maxAttempts > 0 ? (quiz as any).maxAttempts : 1
+    const existing = await db.query.attempts.findMany({
+      where: and(
+        eq(attemptsTable.quizId, quizId),
+        eq(attemptsTable.userId, userId),
+        isNotNull(attemptsTable.submittedAt)
+      )
+    })
+    if (existing.length >= allowed) {
+      return { isSuccess: false, message: "No attempts remaining" }
+    }
 
     const [attempt] = await db
       .insert(attemptsTable)

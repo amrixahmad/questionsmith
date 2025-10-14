@@ -48,7 +48,7 @@ export default async function SharedTakeQuizPage({
   })
 
   const attemptRes = await startAttemptAction(quiz.id)
-  if (!attemptRes.isSuccess) return redirect(`/s/${token}`)
+  if (!attemptRes.isSuccess) return redirect(`/s/${token}?notice=no_attempts`)
 
   async function submit(formData: FormData) {
     "use server"

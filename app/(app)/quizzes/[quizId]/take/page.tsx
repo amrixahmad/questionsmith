@@ -39,7 +39,8 @@ export default async function TakeQuizPage({
   })
 
   const attemptRes = await startAttemptAction(quizId)
-  if (!attemptRes.isSuccess) return redirect(`/quizzes/${quizId}`)
+  if (!attemptRes.isSuccess)
+    return redirect(`/quizzes/${quizId}?notice=no_attempts`)
 
   async function submit(formData: FormData) {
     "use server"

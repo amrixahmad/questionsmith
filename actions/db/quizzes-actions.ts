@@ -27,6 +27,34 @@ export async function getQuizzesByUserIdAction(
   }
 }
 
+export async function updateMaxAttemptsAction(
+  quizId: string,
+  maxAttempts: number
+): Promise<ActionState<SelectQuiz>> {
+  try {
+    const { userId } = await auth()
+    if (!userId) return { isSuccess: false, message: "Not authenticated" }
+
+    const quiz = await db.query.quizzes.findFirst({
+      where: eq(quizzesTable.id, quizId)
+    })
+    if (!quiz) return { isSuccess: false, message: "Quiz not found" }
+    if (quiz.userId !== userId) return { isSuccess: false, message: "Forbidden" }
+
+    const value = Number.isFinite(maxAttempts) ? Math.max(1, Math.floor(maxAttempts)) : 1
+    const [updated] = await db
+      .update(quizzesTable)
+      .set({ maxAttempts: value })
+      .where(eq(quizzesTable.id, quizId))
+      .returning()
+
+    return { isSuccess: true, message: "Max attempts updated", data: updated }
+  } catch (error) {
+    console.error("updateMaxAttemptsAction error", error)
+    return { isSuccess: false, message: "Failed to update max attempts" }
+  }
+}
+
 export async function publishQuizAction(
   quizId: string
 ): Promise<ActionState<SelectQuiz>> {
