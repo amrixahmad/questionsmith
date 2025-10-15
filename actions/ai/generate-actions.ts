@@ -95,6 +95,59 @@ function optionIndex(value: unknown, options: string[]): number | null {
   return idx >= 0 ? idx : null
 }
 
+function sanitizeGeneratedQuestion(q: GeneratedQuestion): GeneratedQuestion | null {
+  const stem = String(q.stem ?? "").trim()
+  if (!stem) return null
+  if (q.type === "multiple_choice") {
+    const optsTexts = normalizeOptionsServer(q.options)
+    const seen = new Set<string>()
+    const keptIdx: number[] = []
+    for (let i = 0; i < optsTexts.length; i++) {
+      const t = String(optsTexts[i] ?? "").trim()
+      if (!t) continue
+      const key = t.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      keptIdx.push(i)
+      if (keptIdx.length >= 4) break
+    }
+    if (keptIdx.length < 2) return null
+    let newOptions: any[] = []
+    if (Array.isArray(q.options)) {
+      for (const i of keptIdx) {
+        const o = (q.options as any[])[i]
+        if (o && typeof o === "object" && "text" in o) {
+          newOptions.push(o)
+        } else {
+          newOptions.push({ id: String(i + 1), text: String(optsTexts[i]) })
+        }
+      }
+    } else {
+      newOptions = keptIdx.map((i, k) => ({ id: String(k + 1), text: String(optsTexts[i]) }))
+    }
+    const texts = newOptions.map(o => String((o as any).text ?? "").trim())
+    const idx = optionIndex(q.answer, texts)
+    if (idx == null || idx < 0 || idx >= texts.length) return null
+    return { ...q, stem, options: newOptions, answer: idx }
+  }
+  if (q.type === "true_false") {
+    const toBool = (v: unknown) => {
+      if (typeof v === "boolean") return v
+      const s = String(v).trim().toLowerCase()
+      if (["true", "t", "yes", "y", "1"].includes(s)) return true
+      if (["false", "f", "no", "n", "0"].includes(s)) return false
+      return null
+    }
+    const b = toBool(q.answer)
+    if (b == null) return null
+    return { ...q, stem, options: undefined, answer: b }
+  }
+  // short_answer | fill_blank
+  const ans = String(q.answer ?? "").trim()
+  if (!ans) return null
+  return { ...q, stem, options: undefined, answer: ans }
+}
+
     // 1) Persist content source
     const [source] = await db
       .insert(contentSourcesTable)
@@ -109,14 +162,17 @@ function optionIndex(value: unknown, options: string[]): number | null {
     // 2) Generate quiz structure via OpenAI
     const generated = await generateQuizFromText(input.text, params)
 
-    // 2b) Enforce allowed types and even distribution
+    // 2b) Enforce allowed types, sanitize per-type, and even distribution
     const typeList: QuestionType[] = Array.isArray(params.types) && params.types?.length
       ? (params.types as QuestionType[])
       : (["multiple_choice"] as QuestionType[])
 
     const requestedCount = params.questionCount
     const allowed = new Set<QuestionType>(typeList)
-    const pool = generated.questions.filter(q => allowed.has(q.type as QuestionType))
+    const pool = generated.questions
+      .filter(q => allowed.has(q.type as QuestionType))
+      .map(q => sanitizeGeneratedQuestion(q))
+      .filter((q): q is GeneratedQuestion => q != null)
 
     function evenAllocation(total: number, kinds: QuestionType[]): Map<QuestionType, number> {
       const base = Math.floor(total / kinds.length)

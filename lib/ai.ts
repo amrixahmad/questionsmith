@@ -81,8 +81,8 @@ function buildUserPrompt(text: string, params: GenerationParams) {
       distribution,
     "Rules:",
     "- Use ONLY types from allowedTypes.",
-    "- If type is 'multiple_choice': include around 4 plausible options; set 'answer' as a 1-based index (1..N) or a letter A..Z.",
-    "- If type is 'true_false': 'answer' must be a boolean true/false.",
+    "- If type is 'multiple_choice': include EXACTLY 4 plausible options; set 'answer' as a 1-based index 1..4 or a single letter A..D.",
+    "- If type is 'true_false': 'answer' must be a boolean true or false (no strings).",
     "- If type is 'short_answer' or 'fill_blank': 'answer' must be a short text string.",
     "Generate diverse questions. Ensure correctness and clarity.",
     withExplanations
