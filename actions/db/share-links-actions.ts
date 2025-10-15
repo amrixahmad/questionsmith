@@ -11,12 +11,36 @@ import { db } from "@/db/db"
 import { quizzesTable } from "@/db/schema/quizzes-schema"
 import { shareLinksTable, type SelectShareLink } from "@/db/schema/share-links-schema"
 import { ActionState } from "@/types"
-import { and, eq, isNotNull } from "drizzle-orm"
+import { and, desc, eq, isNotNull } from "drizzle-orm"
 import { auth } from "@clerk/nextjs/server"
 import crypto from "crypto"
 
 function generateToken(len = 24) {
   return crypto.randomBytes(len).toString("base64url")
+}
+
+export async function deactivateShareLinkAction(
+  quizId: string
+): Promise<ActionState<{ count: number }>> {
+  try {
+    const { userId } = await auth()
+    if (!userId) return { isSuccess: false, message: "Not authenticated" }
+
+    const quiz = await db.query.quizzes.findFirst({ where: eq(quizzesTable.id, quizId) })
+    if (!quiz) return { isSuccess: false, message: "Quiz not found" }
+    if (quiz.userId !== userId) return { isSuccess: false, message: "Forbidden" }
+
+    const updated = await db
+      .update(shareLinksTable)
+      .set({ isPublic: false })
+      .where(and(eq(shareLinksTable.quizId, quizId), eq(shareLinksTable.isPublic, true)))
+      .returning({ id: shareLinksTable.id })
+
+    return { isSuccess: true, message: "Share link disabled", data: { count: updated.length } }
+  } catch (error) {
+    console.error("deactivateShareLinkAction error", error)
+    return { isSuccess: false, message: "Failed to disable share link" }
+  }
 }
 
 export async function createShareLinkAction(
@@ -40,6 +64,28 @@ export async function createShareLinkAction(
       return { isSuccess: true, message: "Share link ready", data: { shareLink: existing } }
     }
 
+    // If there's a previous link (is_public=false), reactivate it to preserve token & analytics
+    const prev = (
+      await db.query.shareLinks.findMany({
+        where: eq(shareLinksTable.quizId, quizId),
+        orderBy: desc(shareLinksTable.createdAt),
+        limit: 1
+      })
+    )[0]
+    if (prev && !prev.isPublic) {
+      const [updated] = await db
+        .update(shareLinksTable)
+        .set({ isPublic: true })
+        .where(eq(shareLinksTable.id, prev.id))
+        .returning()
+      return {
+        isSuccess: true,
+        message: "Share link reactivated",
+        data: { shareLink: updated }
+      }
+    }
+
+    // Otherwise create a new link
     const token = generateToken(16)
     const [created] = await db
       .insert(shareLinksTable)

@@ -16,7 +16,7 @@ import {
   type InsertQuestion
 } from "@/db/schema"
 import { generateQuizFromText } from "@/lib/ai"
-import type { ActionState, GenerationParams } from "@/types"
+import type { ActionState, GenerationParams, QuestionType, GeneratedQuestion } from "@/types"
 
 export async function generateQuizFromTextAction(input: {
   userId: string
@@ -109,6 +109,64 @@ function optionIndex(value: unknown, options: string[]): number | null {
     // 2) Generate quiz structure via OpenAI
     const generated = await generateQuizFromText(input.text, params)
 
+    // 2b) Enforce allowed types and even distribution
+    const typeList: QuestionType[] = Array.isArray(params.types) && params.types?.length
+      ? (params.types as QuestionType[])
+      : (["multiple_choice"] as QuestionType[])
+
+    const requestedCount = params.questionCount
+    const allowed = new Set<QuestionType>(typeList)
+    const pool = generated.questions.filter(q => allowed.has(q.type as QuestionType))
+
+    function evenAllocation(total: number, kinds: QuestionType[]): Map<QuestionType, number> {
+      const base = Math.floor(total / kinds.length)
+      let rem = total % kinds.length
+      const m = new Map<QuestionType, number>()
+      for (const k of kinds) {
+        const c = base + (rem > 0 ? 1 : 0)
+        if (rem > 0) rem--
+        m.set(k, c)
+      }
+      return m
+    }
+
+    const allocation = evenAllocation(Math.max(1, requestedCount), typeList)
+
+    const byType = new Map<QuestionType, GeneratedQuestion[]>()
+    for (const q of pool) {
+      const t = q.type as QuestionType
+      if (!byType.has(t)) byType.set(t, [])
+      byType.get(t)!.push(q)
+    }
+
+    const selected: GeneratedQuestion[] = []
+    // Pick up to allocated per type (in provided order)
+    for (const t of typeList) {
+      const want = allocation.get(t) ?? 0
+      const arr = byType.get(t) ?? []
+      if (want > 0 && arr.length) {
+        selected.push(...arr.slice(0, Math.min(want, arr.length)))
+      }
+    }
+    // Top-up from leftovers if needed
+    if (selected.length < requestedCount) {
+      const leftovers: GeneratedQuestion[] = []
+      for (const t of typeList) {
+        const want = allocation.get(t) ?? 0
+        const arr = byType.get(t) ?? []
+        if (arr.length > want) leftovers.push(...arr.slice(want))
+      }
+      // Add any remaining allowed items beyond allocations
+      if (leftovers.length) {
+        for (const q of leftovers) {
+          if (selected.length >= requestedCount) break
+          selected.push(q)
+        }
+      }
+    }
+
+    const finalQuestions = selected.slice(0, Math.min(selected.length, requestedCount))
+
     // 3) Persist quiz
     const [quiz] = await db
       .insert(quizzesTable)
@@ -118,12 +176,12 @@ function optionIndex(value: unknown, options: string[]): number | null {
         title: generated.title,
         status: "draft",
         difficulty: generated.difficulty ?? params.difficulty,
-        questionCount: generated.questions.length
+        questionCount: finalQuestions.length
       } satisfies InsertQuiz)
       .returning()
 
     // 4) Persist questions (canonicalize MCQ answers to index where possible)
-    const questionRows: InsertQuestion[] = generated.questions.map((q, idx) => {
+    const questionRows: InsertQuestion[] = finalQuestions.map((q, idx) => {
       let answer: unknown = q.answer
       if (q.type === "multiple_choice" && q.options && q.options.length) {
         const opts = normalizeOptionsServer(q.options)

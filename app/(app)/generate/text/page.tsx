@@ -14,6 +14,7 @@ import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import PendingFieldset from "../_components/pending-fieldset"
 import SubmitButton from "../_components/submit-button"
+import type { QuestionType } from "@/types"
 
 export default async function GenerateFromTextPage() {
   async function generate(formData: FormData) {
@@ -23,6 +24,19 @@ export default async function GenerateFromTextPage() {
 
     const text = String(formData.get("text") || "").trim()
     const count = Number(formData.get("questionCount") || 10)
+    const selectedTypes = (formData.getAll("types") as string[]).map(v =>
+      String(v)
+    )
+    const allowedSet = new Set([
+      "multiple_choice",
+      "true_false",
+      "short_answer",
+      "fill_blank"
+    ])
+    const types = selectedTypes.filter(t => allowedSet.has(t))
+    const finalTypes: QuestionType[] = (
+      types.length ? types : ["multiple_choice"]
+    ) as QuestionType[]
 
     if (!text) return redirect("/generate/text")
 
@@ -30,7 +44,8 @@ export default async function GenerateFromTextPage() {
       userId,
       text,
       params: {
-        questionCount: isNaN(count) ? 10 : Math.max(1, Math.min(50, count))
+        questionCount: isNaN(count) ? 10 : Math.max(1, Math.min(50, count)),
+        types: finalTypes as QuestionType[]
       }
     })
 
@@ -72,6 +87,36 @@ export default async function GenerateFromTextPage() {
                 />
                 <div className="text-muted-foreground mt-1 text-xs">
                   Generating can take 20–40 seconds depending on input size.
+                </div>
+              </div>
+
+              <div>
+                <div className="text-sm font-medium">Question types</div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="types"
+                      value="multiple_choice"
+                      defaultChecked
+                    />
+                    <span>Multiple Choice</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="types" value="true_false" />
+                    <span>True / False</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="types" value="short_answer" />
+                    <span>Short Answer</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="types" value="fill_blank" />
+                    <span>Fill in the Blank</span>
+                  </label>
+                </div>
+                <div className="text-muted-foreground mt-1 text-xs">
+                  If multiple are selected, questions are evenly distributed.
                 </div>
               </div>
 

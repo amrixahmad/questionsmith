@@ -11,6 +11,7 @@ import { quizzesTable, type SelectQuiz } from "@/db/schema/quizzes-schema"
 import { ActionState } from "@/types"
 import { eq, desc } from "drizzle-orm"
 import { auth } from "@clerk/nextjs/server"
+import { createShareLinkAction, deactivateShareLinkAction } from "@/actions/db/share-links-actions"
 
 export async function getQuizzesByUserIdAction(
   userId: string
@@ -74,6 +75,11 @@ export async function publishQuizAction(
       .where(eq(quizzesTable.id, quizId))
       .returning()
 
+    // Auto-create share link on publish (best-effort)
+    try {
+      await createShareLinkAction(quizId)
+    } catch {}
+
     return { isSuccess: true, message: "Quiz published", data: updated }
   } catch (error) {
     console.error("publishQuizAction error", error)
@@ -99,6 +105,11 @@ export async function unpublishQuizAction(
       .set({ status: "draft" })
       .where(eq(quizzesTable.id, quizId))
       .returning()
+
+    // Always disable share link on unpublish (best-effort), preserving token & analytics
+    try {
+      await deactivateShareLinkAction(quizId)
+    } catch {}
 
     return { isSuccess: true, message: "Quiz unpublished", data: updated }
   } catch (error) {

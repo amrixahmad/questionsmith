@@ -59,10 +59,31 @@ function buildSystemPrompt() {
 function buildUserPrompt(text: string, params: GenerationParams) {
   const { questionCount, difficulty, withExplanations, types, language } =
     params
+  const typeList =
+    Array.isArray(types) && types.length ? types : ["multiple_choice"]
+  // Build even distribution guidance when multiple types are chosen
+  let distribution = ""
+  if (typeList.length > 1 && questionCount > 0) {
+    const base = Math.floor(questionCount / typeList.length)
+    let rem = questionCount % typeList.length
+    const parts = typeList.map(t => {
+      const c = base + (rem > 0 ? 1 : 0)
+      if (rem > 0) rem--
+      return `${t}:${c}`
+    })
+    distribution = ` Distribute evenly across selected types as: ${parts.join(", ")}.`
+  }
+
   return [
     `Source content:\n${text.trim()}`,
     "---",
-    `Constraints: questionCount=${questionCount}${difficulty ? `, difficulty=${difficulty}` : ""}${withExplanations ? ", withExplanations=true" : ""}${types && types.length ? ", types=" + types.join("|") : ""}${language ? ", language=" + language : ""}`,
+    `Constraints: questionCount=${questionCount}${difficulty ? `, difficulty=${difficulty}` : ""}${withExplanations ? ", withExplanations=true" : ""}${typeList.length ? ", allowedTypes=" + typeList.join("|") : ""}${language ? ", language=" + language : ""}.` +
+      distribution,
+    "Rules:",
+    "- Use ONLY types from allowedTypes.",
+    "- If type is 'multiple_choice': include around 4 plausible options; set 'answer' as a 1-based index (1..N) or a letter A..Z.",
+    "- If type is 'true_false': 'answer' must be a boolean true/false.",
+    "- If type is 'short_answer' or 'fill_blank': 'answer' must be a short text string.",
     "Generate diverse questions. Ensure correctness and clarity.",
     withExplanations
       ? "Include concise explanations for each question in the 'explanation' field."
