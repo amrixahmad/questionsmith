@@ -7,6 +7,7 @@ Server page for generating a quiz from raw text using OpenAI.
 "use server"
 
 import { generateQuizFromTextAction } from "@/actions/ai/generate-actions"
+import { getGenerationUsage } from "@/lib/usage"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -51,6 +52,35 @@ export default async function GenerateFromTextPage() {
 
     if (res.isSuccess) {
       return redirect(`/quizzes/${res.data.quiz.id}`)
+    }
+
+    // On failure, try to show limit-specific notice with counts
+    const usage = await getGenerationUsage(userId)
+    if (
+      usage.plan === "free" &&
+      usage.monthlyCap != null &&
+      usage.monthlyLeft != null &&
+      usage.monthlyLeft <= 0
+    ) {
+      return redirect(
+        `/dashboard?notice=limit_monthly&cap=${usage.monthlyCap}&used=${usage.monthlyUsed}&left=${Math.max(
+          0,
+          usage.monthlyLeft
+        )}`
+      )
+    }
+    if (
+      usage.plan === "trial" &&
+      usage.trialCap != null &&
+      usage.trialLeft != null &&
+      usage.trialLeft <= 0
+    ) {
+      return redirect(
+        `/dashboard?notice=limit_trial&cap=${usage.trialCap}&used=${usage.trialUsed ?? 0}&left=${Math.max(
+          0,
+          usage.trialLeft
+        )}`
+      )
     }
 
     return redirect("/dashboard")

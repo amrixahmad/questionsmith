@@ -15,7 +15,8 @@ export default function LoginPage() {
 
   return (
     <SignIn
-      forceRedirectUrl="/todo"
+      routing="hash"
+      forceRedirectUrl="/dashboard"
       appearance={{ baseTheme: theme === "dark" ? dark : undefined }}
     />
   )

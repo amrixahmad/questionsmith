@@ -9,9 +9,10 @@ Server actions for quizzes CRUD and queries.
 import { db } from "@/db/db"
 import { quizzesTable, type SelectQuiz } from "@/db/schema/quizzes-schema"
 import { ActionState } from "@/types"
-import { eq, desc } from "drizzle-orm"
+import { eq, desc, and } from "drizzle-orm"
 import { auth } from "@clerk/nextjs/server"
 import { createShareLinkAction, deactivateShareLinkAction } from "@/actions/db/share-links-actions"
+import { getUserPlan } from "@/lib/billing"
 
 export async function getQuizzesByUserIdAction(
   userId: string
@@ -68,6 +69,19 @@ export async function publishQuizAction(
     })
     if (!quiz) return { isSuccess: false, message: "Quiz not found" }
     if (quiz.userId !== userId) return { isSuccess: false, message: "Forbidden" }
+
+    // Plan-based cap: Free can have 1 active published, Trial/Pro up to 20
+    const planInfo = await getUserPlan(userId)
+    const maxActive = planInfo.plan === "free" ? 1 : 20
+    const activeCount = (
+      await db.query.quizzes.findMany({
+        where: and(eq(quizzesTable.userId, userId), eq(quizzesTable.status, "published")),
+        columns: { id: true }
+      })
+    ).length
+    if (activeCount >= maxActive) {
+      return { isSuccess: false, message: "Publish limit reached for your plan. Unpublish another quiz or upgrade." }
+    }
 
     const [updated] = await db
       .update(quizzesTable)

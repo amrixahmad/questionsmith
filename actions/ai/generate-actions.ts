@@ -11,12 +11,15 @@ import {
   contentSourcesTable,
   quizzesTable,
   questionsTable,
+  userPlansTable,
   type InsertQuiz,
   type SelectQuiz,
   type InsertQuestion
 } from "@/db/schema"
 import { generateQuizFromText } from "@/lib/ai"
+import { getUserPlan } from "@/lib/billing"
 import type { ActionState, GenerationParams, QuestionType, GeneratedQuestion } from "@/types"
+import { and, eq, gte } from "drizzle-orm"
 
 export async function generateQuizFromTextAction(input: {
   userId: string
@@ -31,6 +34,56 @@ export async function generateQuizFromTextAction(input: {
       types: input.params?.types,
       language: input.params?.language
     }
+
+    // 0) Plan-based gating (before any inserts or OpenAI calls)
+    const planInfo = await getUserPlan(input.userId)
+    const plan = planInfo.plan
+
+    // caps
+    const perQuizCap = plan === "free" ? 15 : plan === "trial" ? 30 : 50
+    const monthlyCap = plan === "free" ? 5 : plan === "pro" ? 100 : null
+    const trialTotalCap = plan === "trial" ? 30 : null
+
+    // usage queries
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
+
+    if (monthlyCap != null) {
+      const monthCount = (
+        await db.query.quizzes.findMany({
+          where: and(eq(quizzesTable.userId, input.userId), gte(quizzesTable.createdAt, monthStart)),
+          columns: { id: true }
+        })
+      ).length
+      if (monthCount >= monthlyCap) {
+        return { isSuccess: false, message: "Monthly generation limit reached for your plan" }
+      }
+    }
+
+    if (trialTotalCap != null) {
+      const planRow = await db.query.userPlans.findFirst({ where: eq(userPlansTable.userId, input.userId) })
+      const start = planRow?.trialStartedAt ?? monthStart
+      const trialCount = (
+        await db.query.quizzes.findMany({
+          where: and(eq(quizzesTable.userId, input.userId), gte(quizzesTable.createdAt, start)),
+          columns: { id: true }
+        })
+      ).length
+      if (trialCount >= trialTotalCap) {
+        return { isSuccess: false, message: "Trial generation limit reached" }
+      }
+    }
+
+    // enforce per-quiz question cap and allowed types
+    const ALL_TYPES: QuestionType[] = ["multiple_choice", "true_false", "short_answer", "fill_blank"]
+    const FREE_TYPES: QuestionType[] = ["multiple_choice", "true_false"]
+    const requestedTypes = (params.types && params.types.length ? (params.types as QuestionType[]) : (["multiple_choice"] as QuestionType[]))
+    const allowedTypes = plan === "free" ? FREE_TYPES : ALL_TYPES
+    let effectiveTypes = requestedTypes.filter(t => allowedTypes.includes(t))
+    if (!effectiveTypes.length) effectiveTypes = [allowedTypes[0]]
+
+    params.questionCount = Math.max(1, Math.min(perQuizCap, params.questionCount))
+    params.types = effectiveTypes
 
 function normalizeOptionsServer(options: unknown): string[] {
   if (!options) return []

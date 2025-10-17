@@ -147,6 +147,9 @@ export default async function QuizDetailPage({
                 </Button>
               </form>
             )}
+            <Button asChild variant="outline">
+              <Link href="/generate/text">Generate another</Link>
+            </Button>
           </div>
 
           {quiz.status === "published" && (
@@ -204,6 +207,12 @@ export default async function QuizDetailPage({
           </div>
 
           <QuestionList questions={questions} />
+
+          <div className="mt-6">
+            <Button asChild variant="outline">
+              <Link href="/generate/text">Generate another</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
