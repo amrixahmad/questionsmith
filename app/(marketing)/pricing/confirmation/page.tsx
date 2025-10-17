@@ -10,6 +10,10 @@ import {
   CardTitle
 } from "@/components/ui/card"
 import { stripe } from "@/lib/stripe"
+import {
+  manageSubscriptionStatusChange,
+  updateStripeCustomer
+} from "@/actions/stripe-actions"
 import { format } from "date-fns"
 import Link from "next/link"
 import { redirect } from "next/navigation"
@@ -73,6 +77,23 @@ export default async function PricingConfirmationPage({
       }
 
       renewalDate = new Date(subscription.current_period_end * 1000)
+
+      // Eagerly sync membership/plan in case webhooks lag or aren't configured in dev
+      try {
+        await updateStripeCustomer(
+          (session.client_reference_id as string) ?? "",
+          subscription.id,
+          session.customer as string
+        )
+        const productId = subscription.items.data[0].price.product as string
+        await manageSubscriptionStatusChange(
+          subscription.id,
+          subscription.customer as string,
+          productId
+        )
+      } catch (e) {
+        console.error("post-checkout plan sync failed", e)
+      }
     }
 
     const formattedAmount = new Intl.NumberFormat("en-US", {

@@ -8,10 +8,14 @@ Server page for the Dashboard overview. Shows quick stats and entry points.
 
 import { getQuizzesByUserIdAction } from "@/actions/db/quizzes-actions"
 import { getPlanAction, startTrialAction } from "@/actions/billing-actions"
+import { createCheckoutSessionAction } from "@/actions/stripe-actions"
+import { getProfileByUserIdAction } from "@/actions/db/profiles-actions"
+import { manageSubscriptionStatusChange } from "@/actions/stripe-actions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import RouteToast from "@/components/utilities/route-toast"
 import { getGenerationUsage } from "@/lib/usage"
+import { stripe } from "@/lib/stripe"
 import { auth } from "@clerk/nextjs/server"
 import Link from "next/link"
 import { redirect } from "next/navigation"
@@ -29,10 +33,51 @@ export default async function DashboardPage() {
 
   const usage = await getGenerationUsage(userId)
 
+  // If Stripe upgraded membership to Pro but user_plans still shows trial (race/webhook lag),
+  // prefer profile membership for display purposes to avoid stale trial notice.
+  const profileRes = await getProfileByUserIdAction(userId)
+  const membership = profileRes.isSuccess ? profileRes.data.membership : "free"
+  let effectivePlan = membership === "pro" ? "pro" : plan
+
+  // Lazy sync: if UI still shows trial but Stripe subscription is already active/trialing,
+  // update membership/plan now to avoid stale trial card.
+  if (
+    effectivePlan === "trial" &&
+    profileRes.isSuccess &&
+    profileRes.data.stripeSubscriptionId &&
+    profileRes.data.stripeCustomerId
+  ) {
+    try {
+      const sub = await stripe.subscriptions.retrieve(
+        profileRes.data.stripeSubscriptionId
+      )
+      if (sub && (sub.status === "active" || sub.status === "trialing")) {
+        const productId = sub.items.data[0]?.price?.product as string
+        if (productId) {
+          await manageSubscriptionStatusChange(
+            sub.id,
+            profileRes.data.stripeCustomerId,
+            productId
+          )
+          effectivePlan = "pro"
+        }
+      }
+    } catch {}
+  }
+
   async function doStartTrial() {
     "use server"
     await startTrialAction()
     redirect("/dashboard")
+  }
+
+  async function doUpgrade() {
+    "use server"
+    const res = await createCheckoutSessionAction()
+    if (res.isSuccess && res.data.url) {
+      redirect(res.data.url)
+    }
+    redirect("/pricing")
   }
 
   return (
@@ -45,7 +90,7 @@ export default async function DashboardPage() {
         </Button>
       </div>
 
-      {plan === "free" && (
+      {effectivePlan === "free" && (
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -60,18 +105,25 @@ export default async function DashboardPage() {
                   during the trial period.
                 </div>
               </div>
-              <form action={doStartTrial}>
-                <Button type="submit">Start 7-day trial</Button>
-              </form>
+              <div className="flex gap-2">
+                <form action={doStartTrial}>
+                  <Button type="submit">Start 7-day trial</Button>
+                </form>
+                <form action={doUpgrade}>
+                  <Button type="submit" variant="outline">
+                    Upgrade to Pro
+                  </Button>
+                </form>
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {plan === "trial" && (
+      {effectivePlan === "trial" && (
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="font-medium">Trial active</div>
               <div className="text-muted-foreground text-sm">
                 Ends on{" "}
@@ -81,6 +133,11 @@ export default async function DashboardPage() {
                 Trial generations: {usage.trialUsed ?? 0}/{usage.trialCap ?? 30}{" "}
                 remaining {Math.max(0, usage.trialLeft ?? 0)}.
               </div>
+              <form action={doUpgrade}>
+                <Button type="submit" variant="outline">
+                  Upgrade to Pro
+                </Button>
+              </form>
             </div>
           </CardContent>
         </Card>

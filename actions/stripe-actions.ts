@@ -4,13 +4,19 @@ Contains server actions related to Stripe.
 </ai_context>
 */
 
+"use server"
+
 import {
   updateProfileAction,
   updateProfileByStripeCustomerIdAction
 } from "@/actions/db/profiles-actions"
-import { SelectProfile } from "@/db/schema"
+import { db } from "@/db/db"
+import { profilesTable, userPlansTable, type SelectProfile } from "@/db/schema"
+import { eq } from "drizzle-orm"
 import { stripe } from "@/lib/stripe"
 import Stripe from "stripe"
+import { auth } from "@clerk/nextjs/server"
+import type { ActionState } from "@/types"
 
 type MembershipStatus = SelectProfile["membership"]
 
@@ -31,6 +37,56 @@ const getMembershipStatus = (
       return "free"
     default:
       return "free"
+  }
+}
+
+export async function createCheckoutSessionAction(): Promise<ActionState<{ url: string }>> {
+  try {
+    const { userId } = await auth()
+    if (!userId) return { isSuccess: false, message: "Not authenticated" }
+
+    const priceId = process.env.STRIPE_PRICE_PRO_MONTHLY
+    if (!priceId) return { isSuccess: false, message: "Missing STRIPE_PRICE_PRO_MONTHLY" }
+
+    const profile = await db.query.profiles.findFirst({ where: eq(profilesTable.userId, userId) })
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      client_reference_id: userId,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/pricing/confirmation?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard`,
+      customer: profile?.stripeCustomerId || undefined,
+      line_items: [
+        { price: priceId, quantity: 1 }
+      ],
+      metadata: { membership: "pro" }
+    })
+
+    if (!session.url) return { isSuccess: false, message: "Failed to create checkout session" }
+    return { isSuccess: true, message: "Checkout session created", data: { url: session.url } }
+  } catch (error) {
+    console.error("createCheckoutSessionAction error", error)
+    return { isSuccess: false, message: "Failed to create checkout session" }
+  }
+}
+
+export async function createBillingPortalSessionAction(): Promise<ActionState<{ url: string }>> {
+  try {
+    const { userId } = await auth()
+    if (!userId) return { isSuccess: false, message: "Not authenticated" }
+
+    const profile = await db.query.profiles.findFirst({ where: eq(profilesTable.userId, userId) })
+    if (!profile?.stripeCustomerId) return { isSuccess: false, message: "No Stripe customer found" }
+
+    const portal = await stripe.billingPortal.sessions.create({
+      customer: profile.stripeCustomerId,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard`
+    })
+
+    return { isSuccess: true, message: "Portal session created", data: { url: portal.url } }
+  } catch (error) {
+    console.error("createBillingPortalSessionAction error", error)
+    return { isSuccess: false, message: "Failed to create portal session" }
   }
 }
 
@@ -60,6 +116,25 @@ export const updateStripeCustomer = async (
     if (!result.isSuccess) {
       throw new Error("Failed to update customer profile")
     }
+
+    // Upsert link into user_plans so future webhook events can map by customerId
+    const now = new Date()
+    await db
+      .insert(userPlansTable)
+      .values({
+        userId,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscription.id,
+        updatedAt: now
+      })
+      .onConflictDoUpdate({
+        target: userPlansTable.userId,
+        set: {
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscription.id,
+          updatedAt: now
+        }
+      })
 
     return result.data
   } catch (error) {
@@ -131,6 +206,25 @@ export const manageSubscriptionStatusChange = async (
     if (!updateResult.isSuccess) {
       throw new Error("Failed to update subscription status")
     }
+
+    // Reflect into user_plans for gating
+    const plan = membershipStatus === "pro" && ["active", "trialing"].includes(subscription.status)
+      ? "pro"
+      : "free"
+    const currentPeriodEnd = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000)
+      : null
+
+    // Update by stripe customer id; if row is missing, best-effort no-op
+    await db
+      .update(userPlansTable)
+      .set({
+        plan,
+        stripeSubscriptionId: subscription.id,
+        currentPeriodEnd: currentPeriodEnd ?? undefined,
+        updatedAt: new Date()
+      })
+      .where(eq(userPlansTable.stripeCustomerId, customerId))
 
     return membershipStatus
   } catch (error) {
